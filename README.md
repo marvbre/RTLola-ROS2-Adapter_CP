@@ -1,6 +1,5 @@
 <!--
 SPDX-FileCopyrightText: 2023 German Aerospace Center (DLR)
-
 SPDX-License-Identifier: CC-BY-NC-ND-4.0
 -->
 
@@ -12,59 +11,26 @@ SPDX-License-Identifier: CC-BY-NC-ND-4.0
 # RTLola-Ros2-Monitor
 
 ROS 2 adapter for CISPA's RTLola monitoring interpreter.
+Minor fixes for usage in a ROS2 drone workspace have been applied.
 
-The adapter assumes a running ROS 2 workspace, i.e., `ros2 topic list` returns a list of topics that are currently executed. The adapter will then automatically generate RTLola input stream binding for all available topic data. If a topic called `RTLolaOutput` is an available interace, i.e., `RTLolaOutput` is returned by `ros2 interface list`, it will also generate a binding to the respective RTLola outputs. If the service message `RTLolaService` is in the same list, then RTLola will accept service requests and returns the immediate response of the monitor. Hence, the service request is interpreted as inputs and the responses need to match existing output streams. Input subscription will automatically match QoS of their publisher. The response will use the immediate output values when forwarding the inputs. Hence, periodic output might not be updated. 
+# Usage
+Start nodes that have to be monitored, e.g.:
+```
+ros2 bag play -l ./bags/rosbag_2026-08-28_16-56-25_hassan_box/
+```
+Write a minimal translator node that breaks important messages into single bool, int32, unit32 or float32 msgs that can be used for generation.
+Navigate into repo directory, then:
+```
+cd monitor && cargo run
+```
+Once succesful set the ros2.toml to 
+```
+generate = False
+```
+Output of the monitoring is a bool for whether node transition conditions have been met under \RTLolaOutput
 
-Try it out by following the [getting started guidlines](#getting-started) using the existing ROS test workspace!
-
-> [ros2_config.toml](monitor/ros2_config.toml) allows you to freeze the binding by setting `generate_file` to `false`.
-
-> Members of a ros2 topic are prefixed by the package name, i.e., ``<package_name_lowercase>_<member>``. For instance, if the topic ``Adc`` has a member ``float32 a0``, then this member can be accessed by the RTLola specification using ``input adc_a0: Float32``. If a member has a fixed array type, then the array is unfolded, i.e., ``float32[3] arr`` is unfolded to three inputs ``input adc_arr_0: Float32``,  ``input adc_arr_1: Float32``,  and ``input adc_arr_2: Float32``.
- 
-For more RTLola information see [here](https://rtlola.cispa.de/).
-
-A comprehensive RTLola tutorial can be found [here](https://rtlola.cispa.de/playground/tutorial).
-
-## Table of Content
-- [RTLola-Ros2-Monitor](#rtlola-ros2-monitor)
-  - [Table of Content](#table-of-content)
-  - [Getting Started](#getting-started)
-  - [Contributors](#contributors)
-  - [Contributing](#contributing)
-  - [Changes](#changes)
-  - [License](#license)
-
-
-
-## Getting Started
-- source ROS 2 
-- `cd <path_repo>/test_ws`
-- `colcon build`
-- `source install/setup.bash`
-- `ros2 run rtlola_testnode testnode`
-- start new terminal and source ROS 2 
-- `source <path_repo>/test_ws/install/setup.bash`
-- `cd <path_repo>/monitor`
-- fill out [ros2_config.toml](monitor/ros2_config.toml):
-  - `generate_file = true` if new bindings shall be generated
-  - `local_setup_script` should point to the ROS 2 overlay you want to generate bindings for
-- `cargo run -- ../specs/test_spec.lola`
-  
-Tested using Rust Version 1.87.0
-
-> If you want to use ``ros2 run rtlola_node rtlola_ros2_monitor`` then call ``colcon build`` within [rtlola_node](rtlola_node) to build a workspace you can source.
-
-## Contributors
+## Credits to
 - Sebastian Schirmer
   
-## Contributing
-
-Please see [the contribution guidelines](CONTRIBUTING.md) for further information about how to contribute.
-
-## Changes
-
-Please see the [Changelog](CHANGELOG.md) for notable changes of the material.
-
 ## License
-
 Please see the file [LICENSE.md](LICENSE.md) for further information about how the content is licensed.
