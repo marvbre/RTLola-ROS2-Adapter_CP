@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [Specification]
-location = "/ros2_ws/src/RTLola-ROS2-Adapter_CP/specs/cargopack.lola"
+location = "/ros2_ws/src/RTLola-ROS2-Adapter_pkg/specs/cargopack.lola"
 
 # allows to freeze, i.e., disables build.rs
 [GenerateFlag]
-generate = false
+generate = true
 
 # location of the local ros2 setup that shall be used to get message interface information e.g. "/root/repos/DLR/tester/install/setup.bash"
 [LocalSetupScript]
