@@ -1,0 +1,77 @@
+// gesture_state codes (see cargo_drone_pkg/rtlola_translator.py's GESTURE_STATE_MAP,
+// itself mirroring gimbal_fsm.py's GimbalFSM states and their "gesture: X" comments):
+//   0 BLIND   1 SEARCH  2 APPROACH  3 WAITING_FOR_USER  4 IDLE
+//   5 FOLLOW_USER (gesture: Greet)      6 SELECTION (gesture: Point)
+//   7 PROXY_CONTROL (gesture: Proxy)    8 CANCEL_MOVEMENT (gesture: Stop)
+//   9 TAKE_OFF (gesture: Takeoff)       10 TARGET_POSITION (neutral-gesture exit)
+//   11 UNKNOWN (unmapped state string)
+// TODO(colleague): confirm this mapping - inferred from gimbal_fsm.py's state
+// comments, not yet confirmed against your intent for this TBT.
+
+=> 2 (
+    'avoid_collision' [] no_collision(x,y,z) [ distance(x,y,z) to takeoff origin (0,0,0) <= R meters (TODO: pick R) ],
+    * -> (
+            'greet' <> a_greet(gesture_state, operator_id) [ gesture_state == 5 and operator_id != -1 ],
+            'takeoff' <> a_takeoff(gesture_state, z) [ gesture_state == 9 and z > 1 ],
+            * ? (
+                -> (
+                    'point' <> a_point(gesture_state) [ gesture_state == 6 ],
+                    => 2 (
+                        'point_geofence' [] a_point_in_geofence(x, y, z, tx, ty, tz) [ abstand zu point kleiner geofence radius  ],
+                        'vel_direction'  <0..1> a_vel_direction(x, y, z, tx, ty, tz, u, v, w) [ flug richtung point ]
+                    )
+                ),
+                -> (
+                    'start_proxy' <> a_proxy(gesture_state) [ gesture_state == 7 ],
+                    => 2 (
+                        'in_proxy' [] a_state_proxy(gesture_state) [ gesture_state == 7 ],
+                        'vel_direction'  [] a_vel_direction(u,v,w) [ keine zu schnellen beschleunigungen]
+                    ),
+                    'stop'  <> a_stop_proxy(gesture_state) [ gesture_state == 8 ],
+                )
+            ),
+            'exit' <> a_exit(gesture_state) [ gesture_state == 10 ]
+        )
+)
+
+Parallel(22,m=2)[
+
+    Leaf(0 avoid_collision)[G(AP(0))],
+    Kleene(21, n=inf)[
+      Sequence(20)[
+        Leaf(1 greet)[F(AP(2))],
+        Sequence(19)[
+          Leaf(2 takeoff)[F(AP(4))],
+          Sequence(18)[
+            Kleene(16, n=inf)[
+              Fallback(15)[
+                Sequence(7)[
+                  Leaf(3 point)[F(AP(6))],
+                  Parallel(6,m=2)[
+
+                    Leaf(4 point_geofence)[G(AP(8))],
+                    Leaf(5 vel_direction)[F[0,1](AP(10))],
+                  ],
+                ],
+                Sequence(14)[
+                  Leaf(8 start_proxy)[F(AP(12))],
+                  Sequence(13)[
+                    Parallel(11,m=2)[
+
+                      Leaf(9 in_proxy)[G(AP(14))],
+                      Leaf(10 vel_direction)[G(AP(16))],
+                    ],
+                    Leaf(12 stop)[F(AP(18))],
+                  ],
+                ],
+              ]            ],
+            Leaf(17 exit)[F(AP(20))],
+          ],
+        ],
+      ]    ],
+  ]
+
+input x,y,z,u,v,w: 6x Float64
+input tx, ty, tz, 3x Float32
+input gesture_state: uint32
+input operator_id: int32

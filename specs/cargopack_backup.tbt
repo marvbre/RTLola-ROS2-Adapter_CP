@@ -1,0 +1,30 @@
+=> 2 (
+    'avoid_collision' [] no_collision(x,y,z) [ abstand x,y,z von startpunkt nicht mehr als x meter ],
+    * -> (
+            'greet' <> a_greet(gesture_state, operator_id) [ gesture_state ==  "greet" and operator_id != -1 ],
+            'takeoff' <> a_takeoff(gesture_state, z) [ gesture_state ==  "takeoff" and altitude > 1m],
+            * ? (
+                -> (
+                    'point' <> a_point(gesture_state) [ gesture_state == 0],
+                    => 2 (
+                        'point_geofence' [] a_point_in_geofence(tx, ty, tz) [ abstand zu point kleiner geofence radius  ],
+                        'vel_direction'  <0..1> a_vel_direction(tx, ty, tz, u, v, w) [ flug richtung point ]
+                    )
+                ),
+                -> (
+                    'start_proxy' <> a_proxy(gesture_state) [ gesture_state == "proxy" ],
+                    => 2 (
+                        'in_proxy' [] a_state_proxy(gesture_state) [ gesture_state == "proxy" ],
+                        'vel_direction'  [] a_vel_direction(u,v,w) [ keine zu schnellen beschleunigungen]
+                    ),
+                    'stop'  <> a_stop_proxy(gesture_state) [ gesture_state == "stop" ],
+                )
+            ),
+            'exit' <> a_exit(gesture) [ gesture - 3]
+        )
+)
+
+input x,y,z,u,v,w: 6x Float64
+input tx, ty, tz, 3x Float32
+input gesture_state: uint32
+input operator_id: int32

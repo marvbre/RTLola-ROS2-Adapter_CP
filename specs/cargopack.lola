@@ -1,0 +1,18 @@
+input localstate_x : Float64
+input localstate_y : Float64
+input localstate_z : Float64
+input localstate_u : Float64
+input localstate_v : Float64
+input localstate_w : Float64
+
+input targetposition_tx : Float64
+input targetposition_ty : Float64
+input targetposition_tz : Float64
+
+input operatorstatus_gesture_state : UInt32
+input operatorstatus_operator_id : Int32
+
+trigger operatorstatus_gesture_state == 0  "ok"
+trigger operatorstatus_gesture_state != 0  "nook"
+
+output valid_node_transitions := operatorstatus_operator_id == 3

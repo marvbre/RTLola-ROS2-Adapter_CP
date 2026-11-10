@@ -3,6 +3,7 @@
 
 use crate::build_src::config::{Config, QoS};
 use crate::build_src::rust_file_generator::RustFileGenerator;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Write};
 
@@ -18,7 +19,7 @@ impl RustFileGenerator {
         let file = File::create(&file_location).unwrap();
         // Statements to be added depending on ros2 readings
         let mut rtlola_enum = String::new();
-        let mut ros2_msgs = String::new();
+        let mut ros2_msg_imports: BTreeMap<String, Vec<String>> = BTreeMap::new();
         let mut subscribers = String::new();
         let service = if has_service {
             let history = config.QoS_RTLolaService.history.clone();
@@ -39,14 +40,20 @@ impl RustFileGenerator {
         };
         let mut select_statement = String::new();
         // Build statements
-        for (topic, _, qos) in topics {
+        for (topic, msg_name, qos) in topics {
             let parts: Vec<&str> = topic.split('/').collect();
             let topic_name = parts.last().unwrap();
             rtlola_enum.push_str(&format!(
                 "{}::RTLola{topic_name},",
                 topic_name.to_lowercase()
             ));
-            ros2_msgs.push_str(&format!("{topic_name},"));
+            // Group by the topic's actual ROS package instead of assuming a
+            // single hardcoded package for every input message type.
+            let package = msg_name.split('/').next().unwrap();
+            ros2_msg_imports
+                .entry(package.to_string())
+                .or_default()
+                .push(topic_name.to_string());
             let history = qos.history.clone();
             let depth = qos.depth;
             let reliability = qos.reliability.clone();
@@ -75,8 +82,12 @@ impl RustFileGenerator {
             .read_to_string(&mut file_content)
             .unwrap();
         // Replace each template parameter by the actual values
+        let ros2_msg_imports: String = ros2_msg_imports
+            .into_iter()
+            .map(|(package, types)| format!("use r2r::{package}::msg::{{{}}};\n", types.join(", ")))
+            .collect();
         file_content = file_content.replace("$RTLOLAENUM$", &rtlola_enum);
-        file_content = file_content.replace("$ROS2MSGS$", &ros2_msgs);
+        file_content = file_content.replace("$ROS2MSGIMPORTS$", &ros2_msg_imports);
         file_content = file_content.replace("$SUBSCRIBERS$", &subscribers);
         file_content = file_content.replace("$SERVICE$", &service);
         if has_service {
@@ -118,7 +129,16 @@ impl RustFileGenerator {
             file_content = file_content.replace("$SERVICEHANDLERUSE$", "");
             file_content = file_content.replace("$SERVICECASE$", "");
         }
-        file_content = file_content.replace("$SELECTSTATEMENT$", &select_statement);
+        // futures::stream_select! requires at least two branches; with a
+        // single subscriber (and no service) fall back to Box::pin'ing it
+        // directly instead.
+        let stream_count = topics.len() + if has_service { 1 } else { 0 };
+        let stream_expr = if stream_count >= 2 {
+            format!("stream_select!({select_statement})")
+        } else {
+            format!("Box::pin({})", select_statement.trim_end_matches(','))
+        };
+        file_content = file_content.replace("$STREAMEXPR$", &stream_expr);
         // Write input source codeto file
         writeln!(&file, "{}", file_content).unwrap();
         // Format generated file

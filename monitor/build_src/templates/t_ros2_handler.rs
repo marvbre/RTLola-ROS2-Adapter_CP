@@ -12,9 +12,9 @@ use crate::{
 use futures::{stream_select, StreamExt};
 use r2r::{
     qos::{HistoryPolicy, ReliabilityPolicy, DurabilityPolicy, LivelinessPolicy},
-    rtlola_testnode::msg::{$ROS2MSGS$},
     QosProfile,
 };
+$ROS2MSGIMPORTS$
 use rtlola_interpreter::{
     monitor::{Change, Verdicts},
     Monitor,
@@ -40,7 +40,7 @@ impl Ros2Handler {
         // create service handler
         $SERVICEHANDLER$
         // uses futures to handle asynchonous access
-        let mut all = stream_select!($SELECTSTATEMENT$);
+        let mut all = $STREAMEXPR$;
         // specifies frequency of monitor: 100ms = 10Hz
         let _handle = tokio::task::spawn_blocking(move || loop {
             node.spin_once(std::time::Duration::from_millis(100));
