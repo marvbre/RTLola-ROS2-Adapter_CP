@@ -12,6 +12,24 @@ input targetposition_tz : Float64
 input operatorstatus_gesture_state : UInt32
 input operatorstatus_operator_id : Int32
 
+// cargo_drone_pkg's BTLeafState (one bool per cargopack.tbt leaf, index order fixed in
+// rtlola_translator.py's LEAVES), as flat fields btleafstate_active_0 .. btleafstate_active_10.
+// Index -> leaf:
+//  0 avoid_collision   1 greet        2 takeoff             3 point
+//  4 point_geofence    5 vel_direction_point   6 start_proxy   7 in_proxy
+//  8 vel_direction_proxy   9 stop     10 exit
+input btleafstate_active_0 : Bool
+input btleafstate_active_1 : Bool
+input btleafstate_active_2 : Bool
+input btleafstate_active_3 : Bool
+input btleafstate_active_4 : Bool
+input btleafstate_active_5 : Bool
+input btleafstate_active_6 : Bool
+input btleafstate_active_7 : Bool
+input btleafstate_active_8 : Bool
+input btleafstate_active_9 : Bool
+input btleafstate_active_10 : Bool
+
 trigger operatorstatus_gesture_state == 0  "ok"
 trigger operatorstatus_gesture_state != 0  "nook"
 
