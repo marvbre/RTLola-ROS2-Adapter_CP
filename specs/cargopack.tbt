@@ -8,70 +8,64 @@
 // TODO(colleague): confirm this mapping - inferred from gimbal_fsm.py's state
 // comments, not yet confirmed against your intent for this TBT.
 
+c_collision_radius = 10.0;
+c_gesture_greet = 5;
+c_gesture_takeoff = 9;
+c_takeoff_altitude = 1.0;
+c_gesture_point = 6;
+c_gesture_proxy = 7;
+c_proxy_alimit = 1.0;
+c_gesture_stop = 8;
+c_gesture_exit = 10;
+
 => 2 (
-    'avoid_collision' [] no_collision(x,y,z) [ distance(x,y,z) to takeoff origin (0,0,0) <= R meters (TODO: pick R) ],
+    'avoid_collision' [] no_collision(x,y,z) [ !sqrt(x^2.0 + y^2.0 + z^2.0) > c_collision_radius],
     * -> (
-            'greet' <> a_greet(gesture_state, operator_id) [ gesture_state == 5 and operator_id != -1 ],
-            'takeoff' <> a_takeoff(gesture_state, z) [ gesture_state == 9 and z > 1 ],
+            'greet' <> a_greet(gesture_state, operator_id) [ !min(gesture_state == c_gesture_greet, operator_id != -1) ],
+            'takeoff' <> a_takeoff(gesture_state, z) [ !min(gesture_state == c_gesture_takeoff, z > c_takeoff_altitude)],
             * ? (
                 -> (
-                    'point' <> a_point(gesture_state) [ gesture_state == 6 ],
+                    'point' <> a_point(gesture_state) [ gesture_state == c_gesture_point],
                     => 2 (
-                        'point_geofence' [] a_point_in_geofence(x, y, z, tx, ty, tz) [ abstand zu point kleiner geofence radius  ],
-                        'vel_direction'  <0..1> a_vel_direction(x, y, z, tx, ty, tz, u, v, w) [ flug richtung point ]
+                        'point_geofence' [] a_point_in_geofence(tx, ty, tz) [ !sqrt(tx^2.0 + ty^2.0 + tz^2.0) < c_collision_radius ],
+                        'vel_direction'  <0..4> a_towards_target(tx, ty, tz, x, y, z, u, v, w) [ (tx - x) * u + (ty - y) * v + (tz - z) * w > 0.0 ]
                     )
                 ),
                 -> (
-                    'start_proxy' <> a_proxy(gesture_state) [ gesture_state == 7 ],
+                    'start_proxy' <> a_proxy(gesture_state) [ gesture_state == c_gesture_proxy ],
                     => 2 (
-                        'in_proxy' [] a_state_proxy(gesture_state) [ gesture_state == 7 ],
-                        'vel_direction'  [] a_vel_direction(u,v,w) [ keine zu schnellen beschleunigungen]
+                        'in_proxy' [] a_state_proxy(gesture_state) [ gesture_state == c_gesture_proxy ],
+                        'vel_direction'  [] a_vel_direction(u,v,w) [ !sqrt(u^2.0 + v^2.0 + w^2.0) < c_proxy_alimit]
                     ),
-                    'stop'  <> a_stop_proxy(gesture_state) [ gesture_state == 8 ],
+                    'stop'  <> a_stop_proxy(gesture_state) [ gesture_state == c_gesture_stop ]
                 )
             ),
-            'exit' <> a_exit(gesture_state) [ gesture_state == 10 ]
+            'exit' <> a_exit(gesture_state) [ gesture_state == c_gesture_exit ]
         )
 )
 
-Parallel(22,m=2)[
 
-    Leaf(0 avoid_collision)[G(AP(0))],
-    Kleene(21, n=inf)[
-      Sequence(20)[
-        Leaf(1 greet)[F(AP(2))],
-        Sequence(19)[
-          Leaf(2 takeoff)[F(AP(4))],
-          Sequence(18)[
-            Kleene(16, n=inf)[
-              Fallback(15)[
-                Sequence(7)[
-                  Leaf(3 point)[F(AP(6))],
-                  Parallel(6,m=2)[
 
-                    Leaf(4 point_geofence)[G(AP(8))],
-                    Leaf(5 vel_direction)[F[0,1](AP(10))],
-                  ],
-                ],
-                Sequence(14)[
-                  Leaf(8 start_proxy)[F(AP(12))],
-                  Sequence(13)[
-                    Parallel(11,m=2)[
+/* 
 
-                      Leaf(9 in_proxy)[G(AP(14))],
-                      Leaf(10 vel_direction)[G(AP(16))],
-                    ],
-                    Leaf(12 stop)[F(AP(18))],
-                  ],
-                ],
-              ]            ],
-            Leaf(17 exit)[F(AP(20))],
-          ],
-        ],
-      ]    ],
-  ]
+output file mit separatem stream fuer seinen leaf node
 
-input x,y,z,u,v,w: 6x Float64
-input tx, ty, tz, 3x Float32
-input gesture_state: uint32
-input operator_id: int32
+input localstate_x : Float64
+input localstate_y : Float64
+input localstate_z : Float64
+input localstate_u : Float64
+input localstate_v : Float64
+input localstate_w : Float64
+
+input targetposition_tx : Float64
+input targetposition_ty : Float64
+input targetposition_tz : Float64
+
+input operatorstatus_gesture_state : UInt32
+input operatorstatus_operator_id : Int32
+
+trigger operatorstatus_gesture_state == 0  "ok"
+trigger operatorstatus_gesture_state != 0  "nook"
+
+output valid_node_transitions := operatorstatus_operator_id == 3
+*/

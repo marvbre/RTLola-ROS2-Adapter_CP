@@ -1,3 +1,5 @@
+import math
+
 input localstate_x : Float64
 input localstate_y : Float64
 input localstate_z : Float64
@@ -30,7 +32,496 @@ input btleafstate_active_8 : Bool
 input btleafstate_active_9 : Bool
 input btleafstate_active_10 : Bool
 
-trigger operatorstatus_gesture_state == 0  "ok"
-trigger operatorstatus_gesture_state != 0  "nook"
+// Inputs
+output x := localstate_x
+output y := localstate_y
+output z := localstate_z
+output u := localstate_u
+output v := localstate_v
+output w := localstate_w
+output tx := targetposition_tx
+output ty := targetposition_ty
+output tz := targetposition_tz
+output gesture_state := operatorstatus_gesture_state
+output operator_id := operatorstatus_operator_id
 
-output valid_node_transitions := operatorstatus_operator_id == 3
+// AtomicPropositions
+output ap16 : Float64 := (if sqrt((((u ** 2.00) + (v ** 2.00)) + (w ** 2.00))) < 1.00 then 1.0 else -1.0)
+output ap2 : Float64 := min((if gesture_state == 5 then 1.0 else -1.0), (if operator_id != -1 then 1.0 else -1.0))
+output ap8 : Float64 := (if sqrt((((tx ** 2.00) + (ty ** 2.00)) + (tz ** 2.00))) < 10.00 then 1.0 else -1.0)
+output ap20 : Float64 := (if gesture_state == 10 then 1.0 else -1.0)
+output ap4 : Float64 := min((if gesture_state == 9 then 1.0 else -1.0), (if z > 1.00 then 1.0 else -1.0))
+output ap12 : Float64 := (if gesture_state == 7 then 1.0 else -1.0)
+output ap14 : Float64 := (if gesture_state == 7 then 1.0 else -1.0)
+output ap0 : Float64 := (if sqrt((((x ** 2.00) + (y ** 2.00)) + (z ** 2.00))) > 10.00 then 1.0 else -1.0)
+output ap18 : Float64 := (if gesture_state == 8 then 1.0 else -1.0)
+output ap10 : Float64 := (if ((((tx - x) * u) + ((ty - y) * v)) + ((tz - z) * w)) > 0.00 then 1.0 else -1.0)
+output ap6 : Float64 := (if gesture_state == 6 then 1.0 else -1.0)
+
+// Leaf transitions (represent which leaf node is active)
+output leaf_0 := btleafstate_active_0
+output leaf_1 := btleafstate_active_1
+output leaf_2 := btleafstate_active_2
+output leaf_3 := btleafstate_active_3
+output leaf_4 := btleafstate_active_4
+output leaf_5 := btleafstate_active_5
+output leaf_8 := btleafstate_active_6
+output leaf_9 := btleafstate_active_7
+output leaf_10 := btleafstate_active_8
+output leaf_12 := btleafstate_active_9
+output leaf_17 := btleafstate_active_10
+
+// Node transitions (checks if leaf activation is valid wrt TBT)
+output node_transition_0: Bool := !leaf_0.offset(by:-1).defaults(to: false) or leaf_0
+output node_transition_1: Bool := !leaf_1.offset(by:-1).defaults(to: false) or (leaf_2 or leaf_1)
+output node_transition_2: Bool := !leaf_2.offset(by:-1).defaults(to: false) or (leaf_3 or leaf_8 or leaf_2)
+output node_transition_3: Bool := !leaf_3.offset(by:-1).defaults(to: false) or (leaf_4 or leaf_5 or leaf_3)
+output node_transition_4: Bool := !leaf_4.offset(by:-1).defaults(to: false) or (leaf_17 or leaf_4)
+output node_transition_5: Bool := !leaf_5.offset(by:-1).defaults(to: false) or (leaf_17 or leaf_5)
+output node_transition_8: Bool := !leaf_8.offset(by:-1).defaults(to: false) or (leaf_9 or leaf_10 or leaf_8)
+output node_transition_9: Bool := !leaf_9.offset(by:-1).defaults(to: false) or (leaf_12 or leaf_9)
+output node_transition_10: Bool := !leaf_10.offset(by:-1).defaults(to: false) or (leaf_12 or leaf_10)
+output node_transition_12: Bool := !leaf_12.offset(by:-1).defaults(to: false) or (leaf_17 or leaf_12)
+output node_transition_17: Bool := !leaf_17.offset(by:-1).defaults(to: false) or (leaf_3 or leaf_8 or leaf_17)
+output valid_node_transitions : Bool := node_transition_0 and node_transition_1 and node_transition_2 and node_transition_3 and node_transition_4 and node_transition_5 and node_transition_8 and node_transition_9 and node_transition_10 and node_transition_12 and node_transition_17 
+
+// TL monitors
+//- tl_transtion maps from one state to the next
+//- tl_outcome is the labeling fnc
+//- triggers are only produces once another leaf activates
+// G(ap0)
+output tl_transition_0 : UInt
+  spawn when leaf_0
+  eval with if tl_transition_0.offset(by: -1).defaults(to: 1) == 1 and (ap0<0.0) then 0 else
+            if tl_transition_0.offset(by: -1).defaults(to: 1) == 1 and (ap0>0.0) then 1 else
+            if tl_transition_0.offset(by: -1).defaults(to: 1) == 0 and (ap0>0.0) then 0 else
+               tl_transition_0.offset(by: -1).defaults(to: 1)
+  close when !leaf_0
+
+output tl_outcome_0 : Int
+  spawn when leaf_0
+  eval with if tl_transition_0.offset(by: -1).defaults(to: 1) == 1 and tl_transition_0 == 0 then -2 else
+            if tl_transition_0.offset(by: -1).defaults(to: 1) == 1 and tl_transition_0 == 1 then 1 else
+            if tl_transition_0.offset(by: -1).defaults(to: 1) == 0 and tl_transition_0 == 0 then -2 else
+               tl_outcome_0.offset(by: -1).defaults(to: 1)
+  close when !leaf_0
+
+output tl_change_leaf_0
+  spawn when leaf_0
+  eval with tl_outcome_0.offset(by: -1).defaults(to: 0) != tl_outcome_0
+  close when !leaf_0
+
+trigger spawn when leaf_0
+  eval when tl_change_leaf_0 and tl_outcome_0 == 2 with "Satisfied Leaf node 0"
+  close when !leaf_0
+
+trigger spawn when leaf_0
+  eval when tl_change_leaf_0 and tl_outcome_0 == 1 with "Presumably satisfied Leaf node 0"
+  close when !leaf_0
+
+trigger spawn when leaf_0
+  eval when tl_change_leaf_0 and tl_outcome_0 == -1 with "Presumably violated Leaf node 0"
+  close when !leaf_0
+
+trigger spawn when leaf_0
+  eval when tl_change_leaf_0 and tl_outcome_0 == -2 with "Violated Leaf node 0"
+  close when !leaf_0
+
+// F(ap2)
+output tl_transition_1 : UInt
+  spawn when leaf_1
+  eval with if tl_transition_1.offset(by: -1).defaults(to: 1) == 1 and (ap2<0.0) then 1 else
+            if tl_transition_1.offset(by: -1).defaults(to: 1) == 1 and (ap2>0.0) then 0 else
+            if tl_transition_1.offset(by: -1).defaults(to: 1) == 0 and (ap2>0.0) then 0 else
+               tl_transition_1.offset(by: -1).defaults(to: 1)
+  close when !leaf_1
+
+output tl_outcome_1 : Int
+  spawn when leaf_1
+  eval with if tl_transition_1.offset(by: -1).defaults(to: 1) == 1 and tl_transition_1 == 1 then -1 else
+            if tl_transition_1.offset(by: -1).defaults(to: 1) == 1 and tl_transition_1 == 0 then 2 else
+            if tl_transition_1.offset(by: -1).defaults(to: 1) == 0 and tl_transition_1 == 0 then 2 else
+               tl_outcome_1.offset(by: -1).defaults(to: 1)
+  close when !leaf_1
+
+output tl_change_leaf_1
+  spawn when leaf_1
+  eval with tl_outcome_1.offset(by: -1).defaults(to: 0) != tl_outcome_1
+  close when !leaf_1
+
+trigger spawn when leaf_1
+  eval when tl_change_leaf_1 and tl_outcome_1 == 2 with "Satisfied Leaf node 1"
+  close when !leaf_1
+
+trigger spawn when leaf_1
+  eval when tl_change_leaf_1 and tl_outcome_1 == 1 with "Presumably satisfied Leaf node 1"
+  close when !leaf_1
+
+trigger spawn when leaf_1
+  eval when tl_change_leaf_1 and tl_outcome_1 == -1 with "Presumably violated Leaf node 1"
+  close when !leaf_1
+
+trigger spawn when leaf_1
+  eval when tl_change_leaf_1 and tl_outcome_1 == -2 with "Violated Leaf node 1"
+  close when !leaf_1
+
+// F(ap4)
+output tl_transition_2 : UInt
+  spawn when leaf_2
+  eval with if tl_transition_2.offset(by: -1).defaults(to: 1) == 1 and (ap4<0.0) then 1 else
+            if tl_transition_2.offset(by: -1).defaults(to: 1) == 1 and (ap4>0.0) then 0 else
+            if tl_transition_2.offset(by: -1).defaults(to: 1) == 0 and (ap4>0.0) then 0 else
+               tl_transition_2.offset(by: -1).defaults(to: 1)
+  close when !leaf_2
+
+output tl_outcome_2 : Int
+  spawn when leaf_2
+  eval with if tl_transition_2.offset(by: -1).defaults(to: 1) == 1 and tl_transition_2 == 1 then -1 else
+            if tl_transition_2.offset(by: -1).defaults(to: 1) == 1 and tl_transition_2 == 0 then 2 else
+            if tl_transition_2.offset(by: -1).defaults(to: 1) == 0 and tl_transition_2 == 0 then 2 else
+               tl_outcome_2.offset(by: -1).defaults(to: 1)
+  close when !leaf_2
+
+output tl_change_leaf_2
+  spawn when leaf_2
+  eval with tl_outcome_2.offset(by: -1).defaults(to: 0) != tl_outcome_2
+  close when !leaf_2
+
+trigger spawn when leaf_2
+  eval when tl_change_leaf_2 and tl_outcome_2 == 2 with "Satisfied Leaf node 2"
+  close when !leaf_2
+
+trigger spawn when leaf_2
+  eval when tl_change_leaf_2 and tl_outcome_2 == 1 with "Presumably satisfied Leaf node 2"
+  close when !leaf_2
+
+trigger spawn when leaf_2
+  eval when tl_change_leaf_2 and tl_outcome_2 == -1 with "Presumably violated Leaf node 2"
+  close when !leaf_2
+
+trigger spawn when leaf_2
+  eval when tl_change_leaf_2 and tl_outcome_2 == -2 with "Violated Leaf node 2"
+  close when !leaf_2
+
+// F(ap6)
+output tl_transition_3 : UInt
+  spawn when leaf_3
+  eval with if tl_transition_3.offset(by: -1).defaults(to: 1) == 1 and (ap6<0.0) then 1 else
+            if tl_transition_3.offset(by: -1).defaults(to: 1) == 1 and (ap6>0.0) then 0 else
+            if tl_transition_3.offset(by: -1).defaults(to: 1) == 0 and (ap6>0.0) then 0 else
+               tl_transition_3.offset(by: -1).defaults(to: 1)
+  close when !leaf_3
+
+output tl_outcome_3 : Int
+  spawn when leaf_3
+  eval with if tl_transition_3.offset(by: -1).defaults(to: 1) == 1 and tl_transition_3 == 1 then -1 else
+            if tl_transition_3.offset(by: -1).defaults(to: 1) == 1 and tl_transition_3 == 0 then 2 else
+            if tl_transition_3.offset(by: -1).defaults(to: 1) == 0 and tl_transition_3 == 0 then 2 else
+               tl_outcome_3.offset(by: -1).defaults(to: 1)
+  close when !leaf_3
+
+output tl_change_leaf_3
+  spawn when leaf_3
+  eval with tl_outcome_3.offset(by: -1).defaults(to: 0) != tl_outcome_3
+  close when !leaf_3
+
+trigger spawn when leaf_3
+  eval when tl_change_leaf_3 and tl_outcome_3 == 2 with "Satisfied Leaf node 3"
+  close when !leaf_3
+
+trigger spawn when leaf_3
+  eval when tl_change_leaf_3 and tl_outcome_3 == 1 with "Presumably satisfied Leaf node 3"
+  close when !leaf_3
+
+trigger spawn when leaf_3
+  eval when tl_change_leaf_3 and tl_outcome_3 == -1 with "Presumably violated Leaf node 3"
+  close when !leaf_3
+
+trigger spawn when leaf_3
+  eval when tl_change_leaf_3 and tl_outcome_3 == -2 with "Violated Leaf node 3"
+  close when !leaf_3
+
+// G(ap8)
+output tl_transition_4 : UInt
+  spawn when leaf_4
+  eval with if tl_transition_4.offset(by: -1).defaults(to: 1) == 1 and (ap8<0.0) then 0 else
+            if tl_transition_4.offset(by: -1).defaults(to: 1) == 1 and (ap8>0.0) then 1 else
+            if tl_transition_4.offset(by: -1).defaults(to: 1) == 0 and (ap8>0.0) then 0 else
+               tl_transition_4.offset(by: -1).defaults(to: 1)
+  close when !leaf_4
+
+output tl_outcome_4 : Int
+  spawn when leaf_4
+  eval with if tl_transition_4.offset(by: -1).defaults(to: 1) == 1 and tl_transition_4 == 0 then -2 else
+            if tl_transition_4.offset(by: -1).defaults(to: 1) == 1 and tl_transition_4 == 1 then 1 else
+            if tl_transition_4.offset(by: -1).defaults(to: 1) == 0 and tl_transition_4 == 0 then -2 else
+               tl_outcome_4.offset(by: -1).defaults(to: 1)
+  close when !leaf_4
+
+output tl_change_leaf_4
+  spawn when leaf_4
+  eval with tl_outcome_4.offset(by: -1).defaults(to: 0) != tl_outcome_4
+  close when !leaf_4
+
+trigger spawn when leaf_4
+  eval when tl_change_leaf_4 and tl_outcome_4 == 2 with "Satisfied Leaf node 4"
+  close when !leaf_4
+
+trigger spawn when leaf_4
+  eval when tl_change_leaf_4 and tl_outcome_4 == 1 with "Presumably satisfied Leaf node 4"
+  close when !leaf_4
+
+trigger spawn when leaf_4
+  eval when tl_change_leaf_4 and tl_outcome_4 == -1 with "Presumably violated Leaf node 4"
+  close when !leaf_4
+
+trigger spawn when leaf_4
+  eval when tl_change_leaf_4 and tl_outcome_4 == -2 with "Violated Leaf node 4"
+  close when !leaf_4
+
+//  ap10 || X ap10 || XX ap10 || XXX ap10 || XXXX ap10
+output tl_transition_5 : UInt
+  spawn when leaf_5
+  eval with if tl_transition_5.offset(by: -1).defaults(to: 3) == 6 and (ap10<0.0) then 1 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 4 and (ap10>0.0) then 0 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 3 and (ap10<0.0) then 2 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 2 and (ap10<0.0) then 4 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 0 and (ap10>0.0) then 0 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 6 and (ap10>0.0) then 0 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 3 and (ap10>0.0) then 0 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 1 and (ap10<0.0) then 5 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 4 and (ap10<0.0) then 6 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 2 and (ap10>0.0) then 0 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 1 and (ap10>0.0) then 0 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 5 and (ap10>0.0) then 5 else
+               tl_transition_5.offset(by: -1).defaults(to: 3)
+  close when !leaf_5
+
+output tl_outcome_5 : Int
+  spawn when leaf_5
+  eval with if tl_transition_5.offset(by: -1).defaults(to: 3) == 6 and tl_transition_5 == 1 then -1 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 4 and tl_transition_5 == 0 then 2 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 3 and tl_transition_5 == 2 then -1 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 2 and tl_transition_5 == 4 then -1 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 0 and tl_transition_5 == 0 then 2 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 6 and tl_transition_5 == 0 then 2 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 3 and tl_transition_5 == 0 then 2 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 1 and tl_transition_5 == 5 then -2 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 4 and tl_transition_5 == 6 then -1 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 2 and tl_transition_5 == 0 then 2 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 1 and tl_transition_5 == 0 then 2 else
+            if tl_transition_5.offset(by: -1).defaults(to: 3) == 5 and tl_transition_5 == 5 then -2 else
+               tl_outcome_5.offset(by: -1).defaults(to: 3)
+  close when !leaf_5
+
+output tl_change_leaf_5
+  spawn when leaf_5
+  eval with tl_outcome_5.offset(by: -1).defaults(to: 0) != tl_outcome_5
+  close when !leaf_5
+
+trigger spawn when leaf_5
+  eval when tl_change_leaf_5 and tl_outcome_5 == 2 with "Satisfied Leaf node 5"
+  close when !leaf_5
+
+trigger spawn when leaf_5
+  eval when tl_change_leaf_5 and tl_outcome_5 == 1 with "Presumably satisfied Leaf node 5"
+  close when !leaf_5
+
+trigger spawn when leaf_5
+  eval when tl_change_leaf_5 and tl_outcome_5 == -1 with "Presumably violated Leaf node 5"
+  close when !leaf_5
+
+trigger spawn when leaf_5
+  eval when tl_change_leaf_5 and tl_outcome_5 == -2 with "Violated Leaf node 5"
+  close when !leaf_5
+
+// F(ap12)
+output tl_transition_8 : UInt
+  spawn when leaf_8
+  eval with if tl_transition_8.offset(by: -1).defaults(to: 1) == 1 and (ap12<0.0) then 1 else
+            if tl_transition_8.offset(by: -1).defaults(to: 1) == 1 and (ap12>0.0) then 0 else
+            if tl_transition_8.offset(by: -1).defaults(to: 1) == 0 and (ap12>0.0) then 0 else
+               tl_transition_8.offset(by: -1).defaults(to: 1)
+  close when !leaf_8
+
+output tl_outcome_8 : Int
+  spawn when leaf_8
+  eval with if tl_transition_8.offset(by: -1).defaults(to: 1) == 1 and tl_transition_8 == 1 then -1 else
+            if tl_transition_8.offset(by: -1).defaults(to: 1) == 1 and tl_transition_8 == 0 then 2 else
+            if tl_transition_8.offset(by: -1).defaults(to: 1) == 0 and tl_transition_8 == 0 then 2 else
+               tl_outcome_8.offset(by: -1).defaults(to: 1)
+  close when !leaf_8
+
+output tl_change_leaf_8
+  spawn when leaf_8
+  eval with tl_outcome_8.offset(by: -1).defaults(to: 0) != tl_outcome_8
+  close when !leaf_8
+
+trigger spawn when leaf_8
+  eval when tl_change_leaf_8 and tl_outcome_8 == 2 with "Satisfied Leaf node 8"
+  close when !leaf_8
+
+trigger spawn when leaf_8
+  eval when tl_change_leaf_8 and tl_outcome_8 == 1 with "Presumably satisfied Leaf node 8"
+  close when !leaf_8
+
+trigger spawn when leaf_8
+  eval when tl_change_leaf_8 and tl_outcome_8 == -1 with "Presumably violated Leaf node 8"
+  close when !leaf_8
+
+trigger spawn when leaf_8
+  eval when tl_change_leaf_8 and tl_outcome_8 == -2 with "Violated Leaf node 8"
+  close when !leaf_8
+
+// G(ap14)
+output tl_transition_9 : UInt
+  spawn when leaf_9
+  eval with if tl_transition_9.offset(by: -1).defaults(to: 1) == 1 and (ap14<0.0) then 0 else
+            if tl_transition_9.offset(by: -1).defaults(to: 1) == 1 and (ap14>0.0) then 1 else
+            if tl_transition_9.offset(by: -1).defaults(to: 1) == 0 and (ap14>0.0) then 0 else
+               tl_transition_9.offset(by: -1).defaults(to: 1)
+  close when !leaf_9
+
+output tl_outcome_9 : Int
+  spawn when leaf_9
+  eval with if tl_transition_9.offset(by: -1).defaults(to: 1) == 1 and tl_transition_9 == 0 then -2 else
+            if tl_transition_9.offset(by: -1).defaults(to: 1) == 1 and tl_transition_9 == 1 then 1 else
+            if tl_transition_9.offset(by: -1).defaults(to: 1) == 0 and tl_transition_9 == 0 then -2 else
+               tl_outcome_9.offset(by: -1).defaults(to: 1)
+  close when !leaf_9
+
+output tl_change_leaf_9
+  spawn when leaf_9
+  eval with tl_outcome_9.offset(by: -1).defaults(to: 0) != tl_outcome_9
+  close when !leaf_9
+
+trigger spawn when leaf_9
+  eval when tl_change_leaf_9 and tl_outcome_9 == 2 with "Satisfied Leaf node 9"
+  close when !leaf_9
+
+trigger spawn when leaf_9
+  eval when tl_change_leaf_9 and tl_outcome_9 == 1 with "Presumably satisfied Leaf node 9"
+  close when !leaf_9
+
+trigger spawn when leaf_9
+  eval when tl_change_leaf_9 and tl_outcome_9 == -1 with "Presumably violated Leaf node 9"
+  close when !leaf_9
+
+trigger spawn when leaf_9
+  eval when tl_change_leaf_9 and tl_outcome_9 == -2 with "Violated Leaf node 9"
+  close when !leaf_9
+
+// G(ap16)
+output tl_transition_10 : UInt
+  spawn when leaf_10
+  eval with if tl_transition_10.offset(by: -1).defaults(to: 1) == 1 and (ap16<0.0) then 0 else
+            if tl_transition_10.offset(by: -1).defaults(to: 1) == 1 and (ap16>0.0) then 1 else
+            if tl_transition_10.offset(by: -1).defaults(to: 1) == 0 and (ap16>0.0) then 0 else
+               tl_transition_10.offset(by: -1).defaults(to: 1)
+  close when !leaf_10
+
+output tl_outcome_10 : Int
+  spawn when leaf_10
+  eval with if tl_transition_10.offset(by: -1).defaults(to: 1) == 1 and tl_transition_10 == 0 then -2 else
+            if tl_transition_10.offset(by: -1).defaults(to: 1) == 1 and tl_transition_10 == 1 then 1 else
+            if tl_transition_10.offset(by: -1).defaults(to: 1) == 0 and tl_transition_10 == 0 then -2 else
+               tl_outcome_10.offset(by: -1).defaults(to: 1)
+  close when !leaf_10
+
+output tl_change_leaf_10
+  spawn when leaf_10
+  eval with tl_outcome_10.offset(by: -1).defaults(to: 0) != tl_outcome_10
+  close when !leaf_10
+
+trigger spawn when leaf_10
+  eval when tl_change_leaf_10 and tl_outcome_10 == 2 with "Satisfied Leaf node 10"
+  close when !leaf_10
+
+trigger spawn when leaf_10
+  eval when tl_change_leaf_10 and tl_outcome_10 == 1 with "Presumably satisfied Leaf node 10"
+  close when !leaf_10
+
+trigger spawn when leaf_10
+  eval when tl_change_leaf_10 and tl_outcome_10 == -1 with "Presumably violated Leaf node 10"
+  close when !leaf_10
+
+trigger spawn when leaf_10
+  eval when tl_change_leaf_10 and tl_outcome_10 == -2 with "Violated Leaf node 10"
+  close when !leaf_10
+
+// F(ap18)
+output tl_transition_12 : UInt
+  spawn when leaf_12
+  eval with if tl_transition_12.offset(by: -1).defaults(to: 1) == 1 and (ap18<0.0) then 1 else
+            if tl_transition_12.offset(by: -1).defaults(to: 1) == 1 and (ap18>0.0) then 0 else
+            if tl_transition_12.offset(by: -1).defaults(to: 1) == 0 and (ap18>0.0) then 0 else
+               tl_transition_12.offset(by: -1).defaults(to: 1)
+  close when !leaf_12
+
+output tl_outcome_12 : Int
+  spawn when leaf_12
+  eval with if tl_transition_12.offset(by: -1).defaults(to: 1) == 1 and tl_transition_12 == 1 then -1 else
+            if tl_transition_12.offset(by: -1).defaults(to: 1) == 1 and tl_transition_12 == 0 then 2 else
+            if tl_transition_12.offset(by: -1).defaults(to: 1) == 0 and tl_transition_12 == 0 then 2 else
+               tl_outcome_12.offset(by: -1).defaults(to: 1)
+  close when !leaf_12
+
+output tl_change_leaf_12
+  spawn when leaf_12
+  eval with tl_outcome_12.offset(by: -1).defaults(to: 0) != tl_outcome_12
+  close when !leaf_12
+
+trigger spawn when leaf_12
+  eval when tl_change_leaf_12 and tl_outcome_12 == 2 with "Satisfied Leaf node 12"
+  close when !leaf_12
+
+trigger spawn when leaf_12
+  eval when tl_change_leaf_12 and tl_outcome_12 == 1 with "Presumably satisfied Leaf node 12"
+  close when !leaf_12
+
+trigger spawn when leaf_12
+  eval when tl_change_leaf_12 and tl_outcome_12 == -1 with "Presumably violated Leaf node 12"
+  close when !leaf_12
+
+trigger spawn when leaf_12
+  eval when tl_change_leaf_12 and tl_outcome_12 == -2 with "Violated Leaf node 12"
+  close when !leaf_12
+
+// F(ap20)
+output tl_transition_17 : UInt
+  spawn when leaf_17
+  eval with if tl_transition_17.offset(by: -1).defaults(to: 1) == 1 and (ap20<0.0) then 1 else
+            if tl_transition_17.offset(by: -1).defaults(to: 1) == 1 and (ap20>0.0) then 0 else
+            if tl_transition_17.offset(by: -1).defaults(to: 1) == 0 and (ap20>0.0) then 0 else
+               tl_transition_17.offset(by: -1).defaults(to: 1)
+  close when !leaf_17
+
+output tl_outcome_17 : Int
+  spawn when leaf_17
+  eval with if tl_transition_17.offset(by: -1).defaults(to: 1) == 1 and tl_transition_17 == 1 then -1 else
+            if tl_transition_17.offset(by: -1).defaults(to: 1) == 1 and tl_transition_17 == 0 then 2 else
+            if tl_transition_17.offset(by: -1).defaults(to: 1) == 0 and tl_transition_17 == 0 then 2 else
+               tl_outcome_17.offset(by: -1).defaults(to: 1)
+  close when !leaf_17
+
+output tl_change_leaf_17
+  spawn when leaf_17
+  eval with tl_outcome_17.offset(by: -1).defaults(to: 0) != tl_outcome_17
+  close when !leaf_17
+
+trigger spawn when leaf_17
+  eval when tl_change_leaf_17 and tl_outcome_17 == 2 with "Satisfied Leaf node 17"
+  close when !leaf_17
+
+trigger spawn when leaf_17
+  eval when tl_change_leaf_17 and tl_outcome_17 == 1 with "Presumably satisfied Leaf node 17"
+  close when !leaf_17
+
+trigger spawn when leaf_17
+  eval when tl_change_leaf_17 and tl_outcome_17 == -1 with "Presumably violated Leaf node 17"
+  close when !leaf_17
+
+trigger spawn when leaf_17
+  eval when tl_change_leaf_17 and tl_outcome_17 == -2 with "Violated Leaf node 17"
+  close when !leaf_17
+
